@@ -623,6 +623,10 @@ async function init() {
 
   window.venueMarkers = {};
 
+  // Init dates FIRST (must be before marker loop uses allDates[0])
+  const allDates = [...new Set(geojson.features.flatMap(f => Object.keys(f.properties.dates)))].sort();
+  STATE.date = allDates[0];
+
   for (let i = 0; i < geojson.features.length; i++) {
     const f = geojson.features[i];
     const props = f.properties;
@@ -645,10 +649,6 @@ async function init() {
     marker.addTo(map);
     window.venueMarkers[i] = marker;
   }
-
-  // Init dates
-  const allDates = [...new Set(geojson.features.flatMap(f => Object.keys(f.properties.dates)))].sort();
-  STATE.date = allDates[0];
 
   const dateBar = document.getElementById('date-bar');
   allDates.forEach((date, idx) => {
