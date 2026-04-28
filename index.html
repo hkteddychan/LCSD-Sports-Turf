@@ -341,6 +341,7 @@ const STATE = {
   search: '',
   showFull: false,
   markers: {},
+  activeVenueIdx: null,  // index of venue whose popup is currently open
 };
 
 // ── Time period classification ─────────────────────────────────────────────
@@ -590,6 +591,7 @@ async function init() {
     marker.bindPopup('載入中…');
 
     marker.on('click', () => {
+      window.STATE.activeVenueIdx = i;
       const content = buildPopupContent(props, STATE.date, STATE.facility, STATE.time);
       marker.getPopup().setContent(content).openPopup();
 
@@ -599,15 +601,14 @@ async function init() {
           tab.addEventListener('click', () => {
             const newFac = tab.dataset.popupfac;
             STATE.facility = newFac;
-            // Update tab buttons
             document.querySelectorAll('.popup-facility-tab').forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
-            // Update facility bar
             document.querySelectorAll('.facility-btn').forEach(b => b.classList.remove('active'));
             const barBtn = document.querySelector(`.facility-btn[data-facility="${newFac}"]`);
             if (barBtn) barBtn.classList.add('active');
-            // Re-render
-            marker.getPopup().setContent(buildPopupContent(props, STATE.date, newFac, STATE.time)).openPopup();
+            if (window.STATE.activeVenueIdx === i) {
+              marker.getPopup().setContent(buildPopupContent(props, STATE.date, newFac, STATE.time)).openPopup();
+            }
             applyFilters();
           });
         });
@@ -634,6 +635,16 @@ async function init() {
       document.querySelectorAll('.date-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       STATE.date = date;
+
+      // Refresh open popup with new date
+      if (window.STATE.activeVenueIdx !== null) {
+        const marker = window.venueMarkers[window.STATE.activeVenueIdx];
+        const venueData = window.venueGeoJSON.features[window.STATE.activeVenueIdx].properties;
+        if (marker && marker.isPopupOpen()) {
+          marker.getPopup().setContent(buildPopupContent(venueData, STATE.date, STATE.facility, STATE.time)).openPopup();
+        }
+      }
+
       applyFilters();
     });
     dateBar.appendChild(btn);
@@ -659,6 +670,14 @@ async function init() {
       document.querySelectorAll('.facility-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       STATE.facility = btn.dataset.facility;
+      // Refresh open popup
+      if (window.STATE.activeVenueIdx !== null) {
+        const marker = window.venueMarkers[window.STATE.activeVenueIdx];
+        const venueData = window.venueGeoJSON.features[window.STATE.activeVenueIdx].properties;
+        if (marker && marker.isPopupOpen()) {
+          marker.getPopup().setContent(buildPopupContent(venueData, STATE.date, STATE.facility, STATE.time)).openPopup();
+        }
+      }
       applyFilters();
     });
   });
@@ -669,6 +688,14 @@ async function init() {
       document.querySelectorAll('.time-pill').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       STATE.time = btn.dataset.time;
+      // Refresh open popup
+      if (window.STATE.activeVenueIdx !== null) {
+        const marker = window.venueMarkers[window.STATE.activeVenueIdx];
+        const venueData = window.venueGeoJSON.features[window.STATE.activeVenueIdx].properties;
+        if (marker && marker.isPopupOpen()) {
+          marker.getPopup().setContent(buildPopupContent(venueData, STATE.date, STATE.facility, STATE.time)).openPopup();
+        }
+      }
       applyFilters();
     });
   });
