@@ -341,7 +341,6 @@ const STATE = {
   search: '',
   showFull: false,
   markers: {},
-  activeVenueIdx: null,  // index of venue whose popup is currently open
 };
 
 // ── Time period classification ─────────────────────────────────────────────
@@ -591,7 +590,6 @@ async function init() {
     marker.bindPopup('載入中…');
 
     marker.on('click', () => {
-      window.STATE.activeVenueIdx = i;
       const content = buildPopupContent(props, STATE.date, STATE.facility, STATE.time);
       marker.getPopup().setContent(content).openPopup();
 
@@ -601,14 +599,15 @@ async function init() {
           tab.addEventListener('click', () => {
             const newFac = tab.dataset.popupfac;
             STATE.facility = newFac;
+            // Update tab buttons
             document.querySelectorAll('.popup-facility-tab').forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
+            // Update facility bar
             document.querySelectorAll('.facility-btn').forEach(b => b.classList.remove('active'));
             const barBtn = document.querySelector(`.facility-btn[data-facility="${newFac}"]`);
             if (barBtn) barBtn.classList.add('active');
-            if (window.STATE.activeVenueIdx === i) {
-              marker.getPopup().setContent(buildPopupContent(props, STATE.date, newFac, STATE.time)).openPopup();
-            }
+            // Re-render
+            marker.getPopup().setContent(buildPopupContent(props, STATE.date, newFac, STATE.time)).openPopup();
             applyFilters();
           });
         });
