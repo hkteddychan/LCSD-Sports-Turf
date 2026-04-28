@@ -149,10 +149,33 @@
    flex-shrink: 0; display: flex; align-items: center; justify-content: center;
    font-size: 8px; font-weight: 700; color: white;
   }
+  .legend-num {
+   width: 18px; height: 18px; border-radius: 50%;
+   border: 2px solid white; box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+   flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+   font-size: 9px; font-weight: 700; color: white;
+  }
   .legend-cell {
    width: 18px; height: 14px; border-radius: 3px;
    display: inline-block; margin-right: 4px;
   }
+
+  /* ── Turf Markers ── */
+  .turf-marker {
+   border-radius: 50%;
+   box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+   transition: transform 0.2s, box-shadow 0.2s;
+   display: flex; align-items: center; justify-content: center;
+   font-weight: 700; color: white;
+  }
+  .turf-marker:hover { transform: scale(1.25); box-shadow: 0 4px 14px rgba(0,0,0,0.4); }
+  .turf-marker.avail { background: #3949ab; border: 2.5px solid white; box-shadow: 0 2px 8px rgba(57,73,171,0.4); }
+  .turf-marker.avail-low { background: #f57f17; border: 2.5px solid white; box-shadow: 0 2px 8px rgba(245,127,23,0.4); }
+  .turf-marker.zero { background: #bdbdbd; border: 2px solid white; opacity: 0.5; }
+  .turf-marker-text { font-size: 10px; line-height: 1; text-align: center; }
+  .turf-tooltip { font-size: 12px; }
+  .turf-marker-wrapper { transition: opacity 0.3s; }
+  .turf-marker-wrapper.turf-hidden { opacity: 0; pointer-events: none; }
 
   /* ── Popup ── */
   .leaflet-popup-content-wrapper { border-radius: 14px; box-shadow: 0 4px 24px rgba(0,0,0,0.16); }
@@ -318,16 +341,16 @@
 <div id="legend">
  <h4>圖例 | Legend</h4>
  <div class="legend-row">
-  <div class="legend-dot" style="background:#43a047;"></div>
-  <span>有位 available</span>
+  <div class="legend-num" style="background:#3949ab;">7+</div>
+  <span>充足 available</span>
  </div>
  <div class="legend-row">
-  <div class="legend-dot" style="background:#ffeb3b;"></div>
+  <div class="legend-num" style="background:#f57f17;">1-6</div>
   <span>少量 limited</span>
  </div>
  <div class="legend-row">
-  <div class="legend-dot" style="background:#ef5350;"></div>
-  <span>已滿 full</span>
+  <div class="legend-num" style="background:#bdbdbd;">—</div>
+  <span>已滿 full（隱藏）</span>
  </div>
 </div>
 
@@ -504,6 +527,33 @@ function circleColor(available, total) {
   return '#43a047';
 }
 
+// ── Marker Icon (number + color) ───────────────────────────────────────────────
+function createTurfIcon(available, totalSessions) {
+  if (totalSessions === 0 || available === 0) {
+    return L.divIcon({
+      className: 'turf-marker-wrapper',
+      html: `<div class="turf-marker zero" style="width:22px;height:22px"><div class="turf-marker-text">—</div></div>`,
+      iconSize: [22, 22], iconAnchor: [11, 11], popupAnchor: [0, -11]
+    });
+  }
+  const text = available > 99 ? '99+' : available;
+  const cls = available >= 7 ? 'avail' : 'avail-low';
+  const sz = available > 99 ? 34 : available > 9 ? 28 : 24;
+  return L.divIcon({
+    className: 'turf-marker-wrapper',
+    html: `<div class="turf-marker ${cls}" style="width:${sz}px;height:${sz}px"><div class="turf-marker-text">${text}</div></div>`,
+    iconSize: [sz, sz], iconAnchor: [sz/2, sz/2], popupAnchor: [0, -sz/2]
+  });
+}
+
+// ── Marker tooltip ───────────────────────────────────────────────────────────
+function addMarkerTooltip(marker, name_tc, name_en) {
+  marker.bindTooltip(`<b>${name_tc}</b><br>${name_en}`, {
+    permanent: false, direction: 'top',
+    className: 'turf-tooltip'
+  });
+}
+
 // ── Apply filters ─────────────────────────────────────────────────────────────
 function applyFilters() {
   const activeDate = STATE.date;
@@ -517,10 +567,11 @@ function applyFilters() {
   for (const [venueId, marker] of Object.entries(window.venueMarkers)) {
     const venueData = window.venueGeoJSON.features[venueId];
     const props = venueData.properties;
+    const wrapper = marker.getElement?.();
 
     // District filter
     if (STATE.district !== 'all' && props.district !== STATE.district) {
-      marker.setStyle({ opacity: 0, fillOpacity: 0 });
+      wrapper?.classList.add('turf-hidden');
       continue;
     }
 
@@ -531,7 +582,7 @@ function applyFilters() {
                     props.name_en.toLowerCase().includes(q) ||
                     props.address.toLowerCase().includes(q);
       if (!match) {
-        marker.setStyle({ opacity: 0, fillOpacity: 0 });
+        wrapper?.classList.add('turf-hidden');
         continue;
       }
     }
@@ -542,17 +593,16 @@ function applyFilters() {
       if (activeTime !== 'all' && getTimePeriod(parseInt(s[0].split(':')[0])) !== activeTime) return false;
       return true;
     }).length : 0;
-    const hasSlots = available > 0;
 
     // Show full toggle
     if (!showFull && available === 0 && totalSessions > 0) {
-      marker.setStyle({ opacity: 0, fillOpacity: 0 });
+      wrapper?.classList.add('turf-hidden');
       fullCount++;
       continue;
     }
 
-    const color = circleColor(available, totalSessions);
-    marker.setStyle({ color, fillColor: color, opacity: 0.9, fillOpacity: 0.85 });
+    wrapper?.classList.remove('turf-hidden');
+    marker.setIcon(createTurfIcon(available, totalSessions));
     visibleCount++;
   }
 
@@ -579,16 +629,14 @@ async function init() {
     const props = f.properties;
     const [lng, lat] = f.geometry.coordinates;
 
-    const marker = L.circleMarker([lat, lng], {
-      radius: 9,
-      color: '#43a047',
-      fillColor: '#43a047',
-      fillOpacity: 0.85,
-      opacity: 0.9,
-      weight: 2,
-    });
+    const available0 = countAvailable(props, allDates[0], STATE.facility, STATE.time);
+    const d0 = props.dates[allDates[0]];
+    const total0 = d0 ? Object.values(d0).flat().length : 0;
+    const icon0 = createTurfIcon(available0, total0);
+    const marker = L.marker([lat, lng], { icon: icon0 });
 
     marker.bindPopup('載入中…');
+    addMarkerTooltip(marker, props.name_tc, props.name_en);
 
     marker.on('click', () => {
       window.STATE.activeVenueIdx = i;
@@ -615,6 +663,13 @@ async function init() {
       }, 100);
     });
 
+    // Reset activeVenueIdx when THIS popup closes
+    marker.on('popupclose', () => {
+      if (window.STATE.activeVenueIdx === i) {
+        window.STATE.activeVenueIdx = null;
+      }
+    });
+
     marker.addTo(map);
     window.venueMarkers[i] = marker;
   }
@@ -635,16 +690,6 @@ async function init() {
       document.querySelectorAll('.date-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       STATE.date = date;
-
-      // Refresh open popup with new date
-      if (window.STATE.activeVenueIdx !== null) {
-        const marker = window.venueMarkers[window.STATE.activeVenueIdx];
-        const venueData = window.venueGeoJSON.features[window.STATE.activeVenueIdx].properties;
-        if (marker && marker.isPopupOpen()) {
-          marker.getPopup().setContent(buildPopupContent(venueData, STATE.date, STATE.facility, STATE.time)).openPopup();
-        }
-      }
-
       applyFilters();
     });
     dateBar.appendChild(btn);
@@ -670,14 +715,6 @@ async function init() {
       document.querySelectorAll('.facility-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       STATE.facility = btn.dataset.facility;
-      // Refresh open popup
-      if (window.STATE.activeVenueIdx !== null) {
-        const marker = window.venueMarkers[window.STATE.activeVenueIdx];
-        const venueData = window.venueGeoJSON.features[window.STATE.activeVenueIdx].properties;
-        if (marker && marker.isPopupOpen()) {
-          marker.getPopup().setContent(buildPopupContent(venueData, STATE.date, STATE.facility, STATE.time)).openPopup();
-        }
-      }
       applyFilters();
     });
   });
@@ -688,14 +725,6 @@ async function init() {
       document.querySelectorAll('.time-pill').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       STATE.time = btn.dataset.time;
-      // Refresh open popup
-      if (window.STATE.activeVenueIdx !== null) {
-        const marker = window.venueMarkers[window.STATE.activeVenueIdx];
-        const venueData = window.venueGeoJSON.features[window.STATE.activeVenueIdx].properties;
-        if (marker && marker.isPopupOpen()) {
-          marker.getPopup().setContent(buildPopupContent(venueData, STATE.date, STATE.facility, STATE.time)).openPopup();
-        }
-      }
       applyFilters();
     });
   });
