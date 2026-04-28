@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>LCSD 草地足球場 | Turf Soccer Pitches</title>
+ <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+ <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+ <style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+
+  /* ── Header ── */
+  #header {
+   background: #1b5e20;
+   color: white; padding: 10px 16px;
+   display: flex; justify-content: space-between; align-items: center;
+   flex-wrap: wrap; gap: 8px;
+  }
+  #header h1 { font-size: 17px; font-weight: 600; letter-spacing: -0.3px; }
+
+  /* ── Facility Bar ── */
+  #facility-bar {
+   padding: 7px 12px; background: #f1f8e9;
+   border-bottom: 1px solid #dcedc8;
+   display: flex; gap: 5px; flex-wrap: wrap; align-items: center;
+  }
+  .facility-label { font-size: 11px; color: #777; font-weight: 600; margin-right: 2px; }
+  .facility-btn {
+   padding: 6px 14px; border: 1.5px solid #a5d6a7;
+   background: white; color: #2e7d32; border-radius: 18px;
+   cursor: pointer; font-size: 12px; font-weight: 700;
+   transition: all 0.2s; display: flex; align-items: center; gap: 4px;
+  }
+  .facility-btn:hover { background: #e8f5e9; border-color: #43a047; }
+  .facility-btn.active { background: #43a047; color: white; border-color: #43a047; box-shadow: 0 2px 8px rgba(67,160,71,0.35); }
+  .facility-btn:focus { outline: 3px solid #43a047; outline-offset: 2px; }
+  .facility-btn .facility-emoji { font-size: 14px; }
+
+  /* ── Time Pills Bar ── */
+  #time-bar {
+   padding: 6px 12px; background: #fafafa;
+   border-bottom: 1px solid #e0e0e0;
+   display: flex; gap: 5px; flex-wrap: wrap; align-items: center;
+  }
+  .time-label { font-size: 11px; color: #777; font-weight: 600; margin-right: 2px; }
+  .time-pill {
+   padding: 5px 14px; border: 1.5px solid #ccc;
+   background: white; color: #555; border-radius: 20px;
+   cursor: pointer; font-size: 12px; font-weight: 600;
+   transition: all 0.2s; white-space: nowrap;
+  }
+  .time-pill:hover { border-color: #43a047; color: #43a047; }
+  .time-pill.active { background: #43a047; color: white; border-color: #43a047; }
+  .time-pill:focus { outline: 3px solid #43a047; outline-offset: 2px; }
+  .time-pill .pill-icon { margin-right: 2px; }
+
+  /* ── Date Bar ── */
+  #date-bar {
+   padding: 6px 12px; background: #fff;
+   border-bottom: 1px solid #e0e0e0;
+   display: flex; gap: 5px; overflow-x: auto; align-items: center;
+   white-space: nowrap; scrollbar-width: thin; scrollbar-color: #ccc transparent;
+   position: relative;
+  }
+  #date-bar::before, #date-bar::after {
+   content: ''; position: absolute; top: 0; bottom: 0; width: 30px; z-index: 2;
+   pointer-events: none;
+  }
+  #date-bar::before { left: 0; background: linear-gradient(to right, #fff 60%, transparent); }
+  #date-bar::after  { right: 0; background: linear-gradient(to left, #fff 60%, transparent); }
+
+  .date-btn {
+   padding: 5px 10px; border: 1.5px solid #ccc;
+   background: white; color: #555; border-radius: 14px;
+   cursor: pointer; font-size: 11px; font-weight: 600;
+   transition: all 0.2s; flex-shrink: 0;
+  }
+  .date-btn:hover { border-color: #43a047; color: #43a047; }
+  .date-btn.active { background: #43a047; color: white; border-color: #43a047; }
+  .date-btn:focus { outline: 3px solid #43a047; outline-offset: 2px; }
+  .date-btn .date-dow { display: block; font-size: 10px; opacity: 0.7; margin-bottom: 1px; }
+  .date-btn .date-num { display: block; font-size: 13px; }
+  .date-btn.active .date-dow { opacity: 0.85; }
+
+  /* ── Controls ── */
+  #controls {
+   padding: 7px 12px; background: #f5f5f5;
+   display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+   border-bottom: 1px solid #ddd;
+  }
+  #controls label { font-size: 12px; color: #666; font-weight: 600; }
+  #district-filter {
+   padding: 5px 8px; border: 1px solid #ccc; border-radius: 6px;
+   font-size: 12px; min-width: 140px;
+  }
+  #district-filter:focus { outline: 2px solid #43a047; }
+  #search-input {
+   padding: 5px 8px; border: 1px solid #ccc; border-radius: 6px;
+   font-size: 12px; width: 160px;
+  }
+  #search-input:focus { outline: 2px solid #43a047; }
+  .search-wrap { position: relative; display: flex; align-items: center; }
+  .search-wrap .search-icon {
+   position: absolute; left: 8px; color: #aaa; font-size: 12px; pointer-events: none;
+  }
+  #search-input { padding-left: 26px; }
+  .search-clear {
+   position: absolute; right: 6px; background: none; border: none;
+   color: #aaa; cursor: pointer; font-size: 14px; line-height: 1; padding: 2px;
+   display: none;
+  }
+  .search-clear.visible { display: block; }
+  .search-clear:hover { color: #555; }
+
+  .show-full-wrap { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+  .show-full-wrap label { font-size: 11px; color: #888; cursor: pointer; }
+  #show-full-toggle {
+   width: 14px; height: 14px; cursor: pointer; accent-color: #43a047;
+   margin: 0;
+  }
+
+  #stats { font-size: 11px; color: #777; }
+
+  /* ── Map ── */
+  #map { height: calc(100vh - 148px); width: 100%; }
+
+  /* ── Legend ── */
+  #legend {
+   position: absolute; bottom: 30px; right: 10px; z-index: 1000;
+   background: white; border-radius: 10px;
+   box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+   padding: 10px 12px; min-width: 170px;
+   font-size: 11px;
+  }
+  #legend h4 {
+   font-size: 11px; font-weight: 700; color: #1b5e20;
+   margin-bottom: 7px; border-bottom: 1px solid #e8f5e9;
+   padding-bottom: 5px;
+  }
+  .legend-row {
+   display: flex; align-items: center; gap: 7px;
+   margin: 4px 0; color: #444; font-size: 11px;
+  }
+  .legend-dot {
+   width: 16px; height: 16px; border-radius: 50%;
+   border: 2px solid white; box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+   flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+   font-size: 8px; font-weight: 700; color: white;
+  }
+  .legend-cell {
+   width: 18px; height: 14px; border-radius: 3px;
+   display: inline-block; margin-right: 4px;
+  }
+
+  /* ── Popup ── */
+  .leaflet-popup-content-wrapper { border-radius: 14px; box-shadow: 0 4px 24px rgba(0,0,0,0.16); }
+  .popup-content { min-width: 300px; max-width: 360px; }
+  .popup-header {
+   font-size: 15px; font-weight: 700; color: #1b5e20;
+   margin-bottom: 5px; padding-bottom: 6px; border-bottom: 2.5px solid #43a047;
+  }
+  .popup-sub {
+   font-size: 11px; color: #777; margin-top: -3px; margin-bottom: 7px;
+  }
+  .popup-row {
+   display: flex; gap: 6px; margin: 3px 0;
+   font-size: 12px; line-height: 1.4;
+  }
+  .popup-label { font-weight: 700; color: #555; min-width: 56px; }
+  .popup-value { color: #333; flex: 1; }
+
+  /* ── Schedule Grid ── */
+  .popup-schedule {
+   margin-top: 10px; padding: 10px;
+   background: #f1f8e9; border-radius: 10px;
+   border: 1px solid #dcedc8;
+  }
+  .popup-schedule-header {
+   font-size: 11px; font-weight: 700; color: #1b5e20;
+   margin-bottom: 7px; display: flex; justify-content: space-between; align-items: center;
+  }
+  .popup-schedule-summary {
+   font-size: 10.5px; color: #555; margin-bottom: 8px;
+   display: flex; gap: 4px; flex-wrap: wrap;
+  }
+  .summary-chip {
+   padding: 2px 7px; border-radius: 10px; font-size: 10px; font-weight: 600;
+  }
+  .summary-chip.has { background: #c8e6c9; color: #2e7d32; }
+  .summary-chip.full { background: #ffcdd2; color: #c62828; }
+  .summary-chip.empty { background: #eee; color: #999; }
+
+  /* Time grid */
+  .time-grid {
+   display: grid;
+   grid-template-columns: repeat(4, 1fr);
+   gap: 3px;
+  }
+  .time-period-label {
+   grid-column: 1 / -1;
+   font-size: 9px; font-weight: 700; color: #888;
+   text-align: center;
+   padding: 2px 0 1px;
+   border-top: 1px dashed #dcedc8;
+   margin-top: 2px;
+   letter-spacing: 0.5px;
+  }
+  .time-period-label:first-child { border-top: none; margin-top: 0; }
+  .time-cell {
+   padding: 5px 2px; border-radius: 6px;
+   text-align: center; font-size: 10px; font-weight: 600;
+   transition: transform 0.15s, opacity 0.2s;
+   cursor: default; position: relative;
+  }
+  .time-cell:hover { transform: scale(1.06); z-index: 1; }
+  .time-cell .time-label { font-size: 8.5px; opacity: 0.7; font-weight: 400; }
+  .time-cell .time-courts { font-size: 13px; font-weight: 700; }
+  .time-cell.none { background: #ffebee; color: #c62828; }
+  .time-cell.low  { background: #fff9c4; color: #e65100; }
+  .time-cell.mid  { background: #e8f5e9; color: #2e7d32; }
+  .time-cell.high { background: #c8e6c9; color: #1b5e20; }
+  .time-cell.full { background: #a5d6a7; color: #0a3d0a; }
+  .time-cell.filtered-out { opacity: 0.18; }
+
+  .time-cell.none::before  { content: '✕ '; font-size: 8px; }
+  .time-cell.low::before   { content: '! '; font-size: 8px; }
+
+  /* ── Facility tabs in popup ── */
+  .popup-facility-tabs {
+   display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px;
+  }
+  .popup-facility-tab {
+   padding: 3px 8px; border: 1.5px solid #a5d6a7;
+   background: white; color: #2e7d32; border-radius: 10px;
+   cursor: pointer; font-size: 10px; font-weight: 600;
+   transition: all 0.2s;
+  }
+  .popup-facility-tab:hover { background: #e8f5e9; }
+  .popup-facility-tab.active { background: #43a047; color: white; border-color: #43a047; }
+  .popup-facility-tab:focus { outline: 2px solid #43a047; }
+
+  /* ── No data message ── */
+  .no-session-msg {
+   text-align: center; color: #999; font-size: 11px; padding: 8px;
+  }
+ </style>
+</head>
+<body>
+
+<div id="header">
+ <h1>⚽ LCSD 草地足球場 | Turf Soccer Pitches</h1>
+</div>
+
+<!-- Facility Type Bar -->
+<div id="facility-bar">
+ <span class="facility-label">場地：</span>
+ <button class="facility-btn active" data-facility="all">
+  <span class="facility-emoji">🌿</span> 全部
+ </button>
+ <button class="facility-btn" data-facility="標準足球場">
+  <span class="facility-emoji">🏟️</span> 標準
+ </button>
+ <button class="facility-btn" data-facility="人造草地足球場">
+  <span class="facility-emoji">🌱</span> 人造草
+ </button>
+ <button class="facility-btn" data-facility="小型人造草地足球場">
+  <span class="facility-emoji">🥅</span> 小型人造草
+ </button>
+ <button class="facility-btn" data-facility="小型足球場">
+  <span class="facility-emoji">⚽</span> 小型
+ </button>
+</div>
+
+<!-- Time Pills Bar -->
+<div id="time-bar">
+ <span class="time-label">時段：</span>
+ <button class="time-pill active" data-time="all">
+  <span class="pill-icon">🕐</span> 全部
+ </button>
+ <button class="time-pill" data-time="morning">
+  <span class="pill-icon">🌅</span> 早場
+ </button>
+ <button class="time-pill" data-time="afternoon">
+  <span class="pill-icon">☀️</span> 下午
+ </button>
+ <button class="time-pill" data-time="evening">
+  <span class="pill-icon">🌙</span> 晚場
+ </button>
+</div>
+
+<!-- Date Bar -->
+<div id="date-bar"></div>
+
+<!-- Controls -->
+<div id="controls">
+ <label>地區：</label>
+ <select id="district-filter">
+  <option value="all">全部地區</option>
+ </select>
+ <div class="search-wrap">
+  <span class="search-icon">🔍</span>
+  <input id="search-input" placeholder="搜尋場地…" />
+  <button class="search-clear" id="search-clear">✕</button>
+ </div>
+ <div class="show-full-wrap">
+  <input type="checkbox" id="show-full-toggle">
+  <label for="show-full-toggle">顯示已滿</label>
+ </div>
+ <span id="stats"></span>
+</div>
+
+<!-- Map -->
+<div id="map"></div>
+
+<!-- Legend -->
+<div id="legend">
+ <h4>圖例 | Legend</h4>
+ <div class="legend-row">
+  <div class="legend-dot" style="background:#43a047;"></div>
+  <span>有位 available</span>
+ </div>
+ <div class="legend-row">
+  <div class="legend-dot" style="background:#ffeb3b;"></div>
+  <span>少量 limited</span>
+ </div>
+ <div class="legend-row">
+  <div class="legend-dot" style="background:#ef5350;"></div>
+  <span>已滿 full</span>
+ </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+const STATE = {
+  facility: 'all',   // 'all' | facility type
+  time: 'all',        // 'all' | 'morning' | 'afternoon' | 'evening'
+  date: null,         // ISO date string
+  district: 'all',
+  search: '',
+  showFull: false,
+  markers: {},
+};
+
+// ── Time period classification ─────────────────────────────────────────────
+function getTimePeriod(startHour) {
+  if (startHour < 12) return 'morning';
+  if (startHour < 18) return 'afternoon';
+  return 'evening';
+}
+
+function periodLabel(period) {
+  return { morning: '🌅 早場', afternoon: '☀️ 下午', evening: '🌙 晚場' }[period] || period;
+}
+
+// ── Session sort & period groups ─────────────────────────────────────────────
+function sortSessions(sessions) {
+  return [...sessions].sort((a, b) => a[0].localeCompare(b[0]));
+}
+
+function groupSessionsByPeriod(sessions) {
+  const periods = { morning: [], afternoon: [], evening: [] };
+  for (const s of sessions) {
+    const hour = parseInt(s[0].split(':')[0]);
+    periods[getTimePeriod(hour)].push(s);
+  }
+  return periods;
+}
+
+// ── Build time grid HTML ────────────────────────────────────────────────────
+function buildTimeGrid(sessions, timeFilter) {
+  if (!sessions || sessions.length === 0) {
+    return '<div class="no-session-msg">暫無時段</div>';
+  }
+
+  const sorted = sortSessions(sessions);
+  const periods = groupSessionsByPeriod(sorted);
+
+  let html = '<div class="time-grid">';
+
+  const periodNames = ['morning', 'afternoon', 'evening'];
+  const periodTitles = { morning: '🌅 早場 07–12', afternoon: '☀️ 下午 12–18', evening: '🌙 晚場 18–23' };
+
+  let hasAny = false;
+
+  for (const period of periodNames) {
+    const periodSessions = periods[period];
+    if (periodSessions.length === 0) continue;
+    hasAny = true;
+
+    const isFiltered = timeFilter !== 'all';
+
+    html += `<div class="time-period-label">${periodTitles[period]}</div>`;
+
+    for (const [start, end, courts] of periodSessions) {
+      let cls = 'none';
+      if (courts === 0) cls = 'none';
+      else if (courts <= 1) cls = 'low';
+      else if (courts <= 3) cls = 'mid';
+      else if (courts <= 5) cls = 'high';
+      else cls = 'full';
+
+      const filteredClass = isFiltered && getTimePeriod(parseInt(start.split(':')[0])) !== timeFilter ? 'filtered-out' : '';
+
+      html += `<div class="time-cell ${cls} ${filteredClass}" title="${start}–${end}：${courts} 場">
+        <div class="time-courts">${courts}</div>
+        <div class="time-label">${start}</div>
+      </div>`;
+    }
+  }
+
+  if (!hasAny) {
+    return '<div class="no-session-msg">時段已被篩選隱藏</div>';
+  }
+
+  html += '</div>';
+  return html;
+}
+
+// ── Build facility tabs ──────────────────────────────────────────────────────
+function buildFacilityTabs(venueData, activeFac, date, timeFilter) {
+  const allFacs = Object.keys(venueData.dates[date] || {}).sort();
+  if (allFacs.length <= 1) return '';
+
+  let html = '<div class="popup-facility-tabs">';
+  for (const fac of allFacs) {
+    const active = fac === activeFac ? 'active' : '';
+    const count = venueData.dates[date][fac].filter(s => {
+      if (timeFilter === 'all') return true;
+      return getTimePeriod(parseInt(s[0].split(':')[0])) === timeFilter;
+    }).length;
+    html += `<button class="popup-facility-tab ${active}" data-popupfac="${fac}">${fac} (${count})</button>`;
+  }
+  html += '</div>';
+  return html;
+}
+
+// ── Build popup content ──────────────────────────────────────────────────────
+function buildPopupContent(venueData, date, facility, timeFilter) {
+  const d = venueData.dates[date];
+  if (!d) return '<div class="no-session-msg">暫無資料</div>';
+
+  const facs = Object.keys(d).sort();
+  const activeFac = facs.includes(facility) ? facility : facs[0];
+  const sessions = d[activeFac] || [];
+
+  // Summary chips
+  const filteredSessions = sessions.filter(s => {
+    if (timeFilter === 'all') return true;
+    return getTimePeriod(parseInt(s[0].split(':')[0])) === timeFilter;
+  });
+
+  let summaryHtml = '<div class="popup-schedule-summary">';
+  for (const fac of facs) {
+    const all = d[fac].length;
+    const avail = d[fac].filter(s => s[2] > 0).length;
+    const full = d[fac].filter(s => s[2] === 0).length;
+    let cls = 'has';
+    if (avail === 0) cls = 'empty';
+    else if (avail < all * 0.3) cls = 'full';
+    summaryHtml += `<span class="summary-chip ${cls}">${fac}: ${avail}/${all} 有位</span>`;
+  }
+  summaryHtml += '</div>';
+
+  return `
+    <div class="popup-header">${venueData.name_tc}</div>
+    <div class="popup-sub">${venueData.name_en} · ${venueData.district}</div>
+    <div class="popup-row"><span class="popup-label">地址：</span><span class="popup-value">${venueData.address}</span></div>
+    ${buildFacilityTabs(venueData, activeFac, date, timeFilter)}
+    <div class="popup-schedule">
+     <div class="popup-schedule-header">
+      <span>📅 ${date}（${['日','一','二','三','四','五','六'][new Date(date + 'T00:00:00').getDay()]}）</span>
+     </div>
+     ${summaryHtml}
+     ${buildTimeGrid(sessions, timeFilter)}
+    </div>
+  `;
+}
+
+// ── Count available sessions for a venue/date ────────────────────────────────
+function countAvailable(venueData, date, facility, timeFilter) {
+  const d = venueData.dates[date];
+  if (!d) return 0;
+  const facs = facility === 'all' ? Object.keys(d) : [facility];
+  let total = 0;
+  for (const fac of facs) {
+    for (const [start, end, courts] of (d[fac] || [])) {
+      if (timeFilter !== 'all' && getTimePeriod(parseInt(start.split(':')[0])) !== timeFilter) continue;
+      if (courts > 0) total++;
+    }
+  }
+  return total;
+}
+
+// ── Circle color ─────────────────────────────────────────────────────────────
+function circleColor(available, total) {
+  if (total === 0) return '#ccc';
+  if (available === 0) return '#ef5350';
+  const ratio = available / total;
+  if (ratio <= 0.2) return '#ff9800';
+  if (ratio <= 0.5) return '#ffeb3b';
+  return '#43a047';
+}
+
+// ── Apply filters ─────────────────────────────────────────────────────────────
+function applyFilters() {
+  const activeDate = STATE.date;
+  const activeFacility = STATE.facility;
+  const activeTime = STATE.time;
+  const showFull = STATE.showFull;
+
+  let visibleCount = 0;
+  let fullCount = 0;
+
+  for (const [venueId, marker] of Object.entries(window.venueMarkers)) {
+    const venueData = window.venueGeoJSON.features[venueId];
+    const props = venueData.properties;
+
+    // District filter
+    if (STATE.district !== 'all' && props.district !== STATE.district) {
+      marker.setStyle({ opacity: 0, fillOpacity: 0 });
+      continue;
+    }
+
+    // Search filter
+    if (STATE.search) {
+      const q = STATE.search.toLowerCase();
+      const match = props.name_tc.toLowerCase().includes(q) ||
+                    props.name_en.toLowerCase().includes(q) ||
+                    props.address.toLowerCase().includes(q);
+      if (!match) {
+        marker.setStyle({ opacity: 0, fillOpacity: 0 });
+        continue;
+      }
+    }
+
+    const available = countAvailable(props, activeDate, activeFacility, activeTime);
+    const d = props.dates[activeDate];
+    const totalSessions = d ? Object.values(d).flat().filter(s => {
+      if (activeTime !== 'all' && getTimePeriod(parseInt(s[0].split(':')[0])) !== activeTime) return false;
+      return true;
+    }).length : 0;
+    const hasSlots = available > 0;
+
+    // Show full toggle
+    if (!showFull && available === 0 && totalSessions > 0) {
+      marker.setStyle({ opacity: 0, fillOpacity: 0 });
+      fullCount++;
+      continue;
+    }
+
+    const color = circleColor(available, totalSessions);
+    marker.setStyle({ color, fillColor: color, opacity: 0.9, fillOpacity: 0.85 });
+    visibleCount++;
+  }
+
+  document.getElementById('stats').textContent =
+    `顯示 ${visibleCount} 個場地${fullCount > 0 ? ` · ${fullCount} 個已滿（已隱藏）` : ''}`;
+}
+
+// ── Init map ─────────────────────────────────────────────────────────────────
+async function init() {
+  // Load turf data
+  const resp = await fetch('turf_data.json');
+  const geojson = await resp.json();
+  window.venueGeoJSON = geojson;
+
+  const map = L.map('map').setView([22.3193, 114.1694], 11);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap'
+  }).addTo(map);
+
+  window.venueMarkers = {};
+
+  for (let i = 0; i < geojson.features.length; i++) {
+    const f = geojson.features[i];
+    const props = f.properties;
+    const [lng, lat] = f.geometry.coordinates;
+
+    const marker = L.circleMarker([lat, lng], {
+      radius: 9,
+      color: '#43a047',
+      fillColor: '#43a047',
+      fillOpacity: 0.85,
+      opacity: 0.9,
+      weight: 2,
+    });
+
+    marker.bindPopup('載入中…');
+
+    marker.on('click', () => {
+      const content = buildPopupContent(props, STATE.date, STATE.facility, STATE.time);
+      marker.getPopup().setContent(content).openPopup();
+
+      // Facility tab clicks
+      setTimeout(() => {
+        document.querySelectorAll('.popup-facility-tab').forEach(tab => {
+          tab.addEventListener('click', () => {
+            const newFac = tab.dataset.popupfac;
+            STATE.facility = newFac;
+            // Update tab buttons
+            document.querySelectorAll('.popup-facility-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            // Update facility bar
+            document.querySelectorAll('.facility-btn').forEach(b => b.classList.remove('active'));
+            const barBtn = document.querySelector(`.facility-btn[data-facility="${newFac}"]`);
+            if (barBtn) barBtn.classList.add('active');
+            // Re-render
+            marker.getPopup().setContent(buildPopupContent(props, STATE.date, newFac, STATE.time)).openPopup();
+            applyFilters();
+          });
+        });
+      }, 100);
+    });
+
+    marker.addTo(map);
+    window.venueMarkers[i] = marker;
+  }
+
+  // Init dates
+  const allDates = [...new Set(geojson.features.flatMap(f => Object.keys(f.properties.dates)))].sort();
+  STATE.date = allDates[0];
+
+  const dateBar = document.getElementById('date-bar');
+  allDates.forEach((date, idx) => {
+    const d = new Date(date + 'T00:00:00');
+    const dow = ['日','一','二','三','四','五','六'][d.getDay()];
+    const btn = document.createElement('button');
+    btn.className = 'date-btn' + (idx === 0 ? ' active' : '');
+    btn.innerHTML = `<span class="date-dow">${dow}</span><span class="date-num">${d.getMonth()+1}/${d.getDate()}</span>`;
+    btn.dataset.date = date;
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.date-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      STATE.date = date;
+      applyFilters();
+    });
+    dateBar.appendChild(btn);
+  });
+
+  // Init districts
+  const districts = [...new Set(geojson.features.map(f => f.properties.district))].sort();
+  const districtSelect = document.getElementById('district-filter');
+  districts.forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d;
+    opt.textContent = d;
+    districtSelect.appendChild(opt);
+  });
+  districtSelect.addEventListener('change', () => {
+    STATE.district = districtSelect.value;
+    applyFilters();
+  });
+
+  // Facility buttons
+  document.querySelectorAll('.facility-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.facility-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      STATE.facility = btn.dataset.facility;
+      applyFilters();
+    });
+  });
+
+  // Time pills
+  document.querySelectorAll('.time-pill').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.time-pill').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      STATE.time = btn.dataset.time;
+      applyFilters();
+    });
+  });
+
+  // Search
+  const searchInput = document.getElementById('search-input');
+  const searchClear = document.getElementById('search-clear');
+  searchInput.addEventListener('input', () => {
+    STATE.search = searchInput.value;
+    searchClear.classList.toggle('visible', searchInput.value.length > 0);
+    applyFilters();
+  });
+  searchClear.addEventListener('click', () => {
+    searchInput.value = '';
+    STATE.search = '';
+    searchClear.classList.remove('visible');
+    applyFilters();
+  });
+
+  // Show full toggle
+  document.getElementById('show-full-toggle').addEventListener('change', () => {
+    STATE.showFull = document.getElementById('show-full-toggle').checked;
+    applyFilters();
+  });
+
+  applyFilters();
+}
+
+init();
+</script>
+</body>
+</html>
