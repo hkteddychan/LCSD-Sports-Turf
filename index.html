@@ -123,7 +123,43 @@
 
   #stats { font-size: 11px; color: #777; }
 
+  /* ── Refresh Button ── */
+  #refresh-btn {
+    display: flex; align-items: center; gap: 5px;
+    padding: 5px 12px; border: 1.5px solid #a5d6a7;
+    background: white; color: #2e7d32; border-radius: 18px;
+    cursor: pointer; font-size: 12px; font-weight: 700;
+    transition: all 0.2s;
+  }
+  #refresh-btn:hover { background: #e8f5e9; border-color: #43a047; }
+  #refresh-btn:focus { outline: 3px solid #43a047; outline-offset: 2px; }
+  #refresh-btn:disabled { opacity: 0.6; cursor: not-allowed; pointer-events: none; }
+  #refresh-btn .spinner {
+    width: 12px; height: 12px;
+    border: 2px solid #a5d6a7; border-top-color: #43a047;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: none;
+  }
+  #refresh-btn.loading .spinner { display: block; }
+  #refresh-btn.loading .refresh-icon { display: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Last Updated ── */
+  #last-updated {
+    font-size: 11px; color: #999;
+    display: flex; align-items: center; gap: 3px;
+  }
+  #last-updated .dot { width: 6px; height: 6px; border-radius: 50%; background: #4caf50; }
+  #last-updated.stale .dot { background: #ff9800; }
+  #last-updated.old .dot { background: #ef5350; }
+
   /* ── Map ── */
+  .sr-only {
+    position: absolute; width: 1px; height: 1px;
+    padding: 0; margin: -1px; overflow: hidden;
+    clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+  }
   #map { height: calc(100vh - 148px); width: 100%; }
 
   /* ── Legend ── */
@@ -324,12 +360,22 @@
  </select>
  <div class="search-wrap">
   <span class="search-icon">🔍</span>
-  <input id="search-input" placeholder="搜尋場地…" />
-  <button class="search-clear" id="search-clear">✕</button>
+  <label for="search-input" class="sr-only">搜尋場地</label>
+  <input id="search-input" placeholder="搜尋場地…" aria-label="搜尋場地" />
+  <button class="search-clear" id="search-clear" aria-label="清除搜尋">✕</button>
  </div>
  <div class="show-full-wrap">
   <input type="checkbox" id="show-full-toggle">
   <label for="show-full-toggle">顯示已滿</label>
+ </div>
+ <button id="refresh-btn" title="刷新數據">
+  <span class="spinner"></span>
+  <span class="refresh-icon">🔄</span>
+  <span>刷新</span>
+ </button>
+ <div id="last-updated" title="數據更新時間">
+  <span class="dot"></span>
+  <span class="lu-text"></span>
  </div>
  <span id="stats"></span>
 </div>
@@ -365,6 +411,114 @@ const STATE = {
   showFull: false,
   markers: {},
 };
+
+// ── Data Manager (fetch + cache) ──────────────────────────────────────────────
+const DATA_CACHE_KEY = 'lcsd_turf_cache';
+const DATA_TTL = 30 * 60 * 1000; // 30 minutes
+
+let lastFetched = null;
+
+async function fetchVenueData(forceRefresh = false) {
+  // Try cache first (not force refresh)
+  if (!forceRefresh) {
+    const cached = localStorage.getItem(DATA_CACHE_KEY);
+    if (cached) {
+      const { data, timestamp } = JSON.parse(cached);
+      if (Date.now() - timestamp < DATA_TTL) {
+        lastFetched = timestamp;
+        updateLastUpdatedDisplay();
+        return data;
+      }
+    }
+  }
+
+  // Fetch fresh
+  const resp = await fetch('turf_data.json?_=' + Date.now(), { cache: 'no-store' });
+  if (!resp.ok) throw new Error('Fetch failed');
+  const data = await resp.json();
+  lastFetched = Date.now();
+
+  // Save to cache
+  localStorage.setItem(DATA_CACHE_KEY, JSON.stringify({ data, timestamp: lastFetched }));
+  updateLastUpdatedDisplay();
+  return data;
+}
+
+function updateLastUpdatedDisplay() {
+  const el = document.getElementById('last-updated');
+  const textEl = el.querySelector('.lu-text');
+  if (!lastFetched) {
+    textEl.textContent = '未知';
+    el.className = 'old';
+    return;
+  }
+  const diff = Date.now() - lastFetched;
+  const mins = Math.floor(diff / 60000);
+  const hours = Math.floor(mins / 60);
+
+  let label;
+  if (mins < 1) label = '剛剛';
+  else if (mins < 60) label = `${mins}分鐘前`;
+  else if (hours < 24) label = `${hours}小時前`;
+  else {
+    const d = new Date(lastFetched);
+    label = `${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
+  }
+
+  textEl.textContent = `更新: ${label}`;
+  el.className = diff < 5 * 60 * 1000 ? '' : diff < 60 * 60 * 1000 ? 'stale' : 'old';
+}
+
+async function refreshData() {
+  const btn = document.getElementById('refresh-btn');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  btn.classList.add('loading');
+  try {
+    const newData = await fetchVenueData(true); // force refresh
+    window.venueGeoJSON = newData;
+    // Rebuild all markers with new data
+    rebuildAllMarkers(newData);
+    applyFilters();
+  } catch (err) {
+    console.error('Refresh failed:', err);
+    const textEl = document.querySelector('#last-updated .lu-text');
+    textEl.textContent = '更新失敗';
+    document.getElementById('last-updated').className = 'old';
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove('loading');
+  }
+}
+
+function rebuildAllMarkers(geojson) {
+  // Remove existing markers
+  Object.values(window.venueMarkers).forEach(m => m.remove());
+  window.venueMarkers = {};
+
+  for (let i = 0; i < geojson.features.length; i++) {
+    const f = geojson.features[i];
+    const props = f.properties;
+    const [lng, lat] = f.geometry.coordinates;
+
+    const available0 = countAvailable(props, STATE.date, STATE.facility, STATE.time);
+    const d0 = props.dates[STATE.date];
+    const total0 = d0 ? Object.values(d0).flat().length : 0;
+    const icon0 = createTurfIcon(available0, total0);
+    const marker = L.marker([lat, lng], { icon: icon0 });
+
+    marker.bindPopup('載入中…');
+    addMarkerTooltip(marker, props.name_tc, props.name_en);
+
+    marker.on('click', () => {
+      const content = buildPopupContent(props, STATE.date, STATE.facility, STATE.time);
+      marker.getPopup().setContent(content).openPopup();
+    });
+
+    marker.addTo(window._map);
+    window.venueMarkers[i] = marker;
+  }
+}
 
 // ── Time period classification ─────────────────────────────────────────────
 function getTimePeriod(startHour) {
@@ -593,8 +747,13 @@ function applyFilters() {
       return true;
     }).length : 0;
 
-    // Show full toggle
-    if (!showFull && available === 0 && totalSessions > 0) {
+    // Always hide venues with zero sessions (no data for this date/facility/time)
+    if (totalSessions === 0) {
+      wrapper?.classList.add('turf-hidden');
+      continue;
+    }
+    // Show full toggle — hide venues with 0 available (unless showFull is on)
+    if (!showFull && available === 0) {
       wrapper?.classList.add('turf-hidden');
       fullCount++;
       continue;
@@ -606,26 +765,36 @@ function applyFilters() {
   }
 
   document.getElementById('stats').textContent =
-    `顯示 ${visibleCount} 個場地${fullCount > 0 ? ` · ${fullCount} 個已滿（已隱藏）` : ''}`;
+    `顯示 ${visibleCount} 個場地${fullCount > 0 ? ` · ${fullCount} 個已滿（可開啟「顯示已滿」查看）` : ''}`;
 }
 
 // ── Init map ─────────────────────────────────────────────────────────────────
 async function init() {
-  // Load turf data
-  const resp = await fetch('turf_data.json');
-  const geojson = await resp.json();
+  // Load turf data (with cache support)
+  let geojson;
+  try {
+    geojson = await fetchVenueData();
+  } catch (err) {
+    console.error('Failed to load turf data:', err);
+    document.getElementById('stats').textContent = '載入數據失敗，請檢查網絡連接';
+    return;
+  }
   window.venueGeoJSON = geojson;
 
   const map = L.map('map').setView([22.3193, 114.1694], 11);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© OpenStreetMap'
   }).addTo(map);
+  window._map = map;
 
   window.venueMarkers = {};
 
-  // Init dates FIRST (must be before marker loop uses allDates[0])
+  // Init dates — sort + filter to today or future only
+  const today = new Date().toISOString().split('T')[0];
   const allDates = [...new Set(geojson.features.flatMap(f => Object.keys(f.properties.dates)))].sort();
-  STATE.date = allDates[0];
+  const futureDates = allDates.filter(d => d >= today);
+  // Auto-select today if available, else nearest future date
+  STATE.date = futureDates.length > 0 ? futureDates[0] : allDates[0];
 
   for (let i = 0; i < geojson.features.length; i++) {
     const f = geojson.features[i];
@@ -651,14 +820,23 @@ async function init() {
   }
 
   const dateBar = document.getElementById('date-bar');
+  const today = new Date().toISOString().split('T')[0];
   allDates.forEach((date, idx) => {
     const d = new Date(date + 'T00:00:00');
     const dow = ['日','一','二','三','四','五','六'][d.getDay()];
+    const isPast = date < today;
     const btn = document.createElement('button');
-    btn.className = 'date-btn' + (idx === 0 ? ' active' : '');
+    btn.className = 'date-btn' + (date === STATE.date ? ' active' : '') + (isPast ? ' past' : '');
     btn.innerHTML = `<span class="date-dow">${dow}</span><span class="date-num">${d.getMonth()+1}/${d.getDate()}</span>`;
     btn.dataset.date = date;
+    if (isPast) {
+      btn.disabled = true;
+      btn.title = '已過日期';
+      btn.style.opacity = '0.45';
+      btn.style.cursor = 'not-allowed';
+    }
     btn.addEventListener('click', () => {
+      if (isPast) return;
       document.querySelectorAll('.date-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       STATE.date = date;
@@ -721,6 +899,12 @@ async function init() {
     STATE.showFull = document.getElementById('show-full-toggle').checked;
     applyFilters();
   });
+
+  // Refresh button
+  document.getElementById('refresh-btn').addEventListener('click', refreshData);
+
+  // Update last-updated display every minute
+  setInterval(updateLastUpdatedDisplay, 60000);
 
   applyFilters();
 }
