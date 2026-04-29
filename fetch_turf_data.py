@@ -10,9 +10,13 @@ with urllib.request.urlopen(req, timeout=60) as r:
 
 print(f"Got {len(records)} raw records", file=sys.stderr)
 
+# Skip records without coordinates
+valid = [r for r in records if r.get("Venue_Latitude") and r.get("Venue_Longitude")]
+print(f"Records with coordinates: {len(valid)}", file=sys.stderr)
+
 # Group by venue + facility
 venues = {}
-for r in records:
+for r in valid:
     vid = r["Venue_Name_TC"]
     if vid not in venues:
         venues[vid] = {
