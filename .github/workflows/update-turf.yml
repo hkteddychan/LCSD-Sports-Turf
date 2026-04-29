@@ -11,17 +11,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Debug environment
-        run: |
-          python3 --version
-          python3 -c "import sys; print(sys.version)"
-          ls -la fetch_turf_data.py
-          file fetch_turf_data.py
-          head -5 fetch_turf_data.py
       - name: Fetch turf data
-        run: |
-          python3 fetch_turf_data.py 2>&1
-        continue-on-error: true
+        run: python3 fetch_turf_data.py
       - name: Commit if changed
         run: |
           if git diff --quiet turf_data.json; then
