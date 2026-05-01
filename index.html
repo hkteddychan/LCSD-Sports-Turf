@@ -790,9 +790,7 @@ async function init() {
   window.venueMarkers = {};
 
   // Init dates — sort + filter to today or future only (use HK local time)
-  const hkNow = new Date();
-  hkNow.setMinutes(hkNow.getMinutes() + hkNow.getTimezoneOffset() + 480);
-  const today = hkNow.toISOString().split('T')[0];
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Hong_Kong' }); // '2026-05-01'
   const allDates = [...new Set(geojson.features.flatMap(f => Object.keys(f.properties.dates)))].sort();
   const futureDates = allDates.filter(d => d >= today);
   // Auto-select today if available, else nearest future date
@@ -822,10 +820,6 @@ async function init() {
   }
 
   const dateBar = document.getElementById('date-bar');
-  // Use Hong Kong local time for date comparisons (data is in HK time)
-  const hkNow = new Date();
-  hkNow.setMinutes(hkNow.getMinutes() + hkNow.getTimezoneOffset() + 480);
-  const today = hkNow.toISOString().split('T')[0];
   allDates.forEach((date, idx) => {
     const d = new Date(date + 'T00:00:00');
     const dow = ['日','一','二','三','四','五','六'][d.getDay()];
